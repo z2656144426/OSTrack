@@ -9,8 +9,8 @@ from lib.train.admin import TensorboardWriter
 import torch
 import time
 from torch.utils.data.distributed import DistributedSampler
-from torch.cuda.amp import autocast
-from torch.cuda.amp import GradScaler
+import torch
+# 然后使用 torch.amp.GradScaler('cuda') 和 torch.amp.autocast('cuda')
 
 from lib.utils.misc import get_world_size
 
@@ -51,7 +51,7 @@ class LTRTrainer(BaseTrainer):
         self.settings = settings
         self.use_amp = use_amp
         if use_amp:
-            self.scaler = GradScaler()
+            self.scaler = torch.amp.GradScaler('cuda')
 
     def _set_default_settings(self):
         # Dict of all default values
@@ -85,7 +85,7 @@ class LTRTrainer(BaseTrainer):
             if not self.use_amp:
                 loss, stats = self.actor(data)
             else:
-                with autocast():
+                with torch.amp.autocast('cuda'):
                     loss, stats = self.actor(data)
 
             # backward pass and update weights

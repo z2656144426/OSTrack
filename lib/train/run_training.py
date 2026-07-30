@@ -80,7 +80,9 @@ def main():
     parser.add_argument('--script', type=str, required=True, help='Name of the train script.')
     parser.add_argument('--config', type=str, required=True, help="Name of the config file.")
     parser.add_argument('--cudnn_benchmark', type=bool, default=True, help='Set cudnn benchmark on (1) or off (0) (default is on).')
-    parser.add_argument('--local_rank', default=-1, type=int, help='node rank for distributed training')
+    # parser.add_argument('--local_rank', default=-1, type=int, help='node rank for distributed training')
+    parser.add_argument('--local_rank', dest='local_rank_old', default=-1, type=int, help='old style (underscore)')
+    parser.add_argument('--local-rank', dest='local_rank', default=-1, type=int, help='new style (hyphen)')
     parser.add_argument('--save_dir', type=str, help='the directory to save checkpoints and logs')
     parser.add_argument('--seed', type=int, default=42, help='seed for random numbers')
     parser.add_argument('--use_lmdb', type=int, choices=[0, 1], default=0)  # whether datasets are in lmdb format
@@ -93,6 +95,13 @@ def main():
     parser.add_argument('--config_teacher', type=str, help='teacher yaml configure file name')
 
     args = parser.parse_args()
+    # 优先使用 --local-rank（连字符），若未提供则回退到 --local_rank
+    if args.local_rank == -1 and hasattr(args, 'local_rank_old') and args.local_rank_old != -1:
+        args.local_rank = args.local_rank_old
+
+    # 如果环境变量 LOCAL_RANK 存在（torchrun 会设置），则覆盖命令行参数
+    if 'LOCAL_RANK' in os.environ:
+        args.local_rank = int(os.environ['LOCAL_RANK'])
     if args.local_rank != -1:
         dist.init_process_group(backend='nccl')
         torch.cuda.set_device(args.local_rank)

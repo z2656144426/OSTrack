@@ -1,5 +1,10 @@
-import visdom
-import visdom.server
+try:
+    import visdom
+    import visdom.server
+except ImportError:
+    visdom = None
+    import warnings
+    warnings.warn("visdom not installed, visualization will be disabled.")
 import cv2
 import torch
 import copy
@@ -216,8 +221,8 @@ class VisCostVolumeUI(VisBase):
         self.zoom_mode = False
         self.zoom_pos = [int((feat_shape[0] - 1) / 2), int((feat_shape[1] - 1) / 2)]
         self.registered_blocks = registered_blocks
-
-        self.visdom.register_event_handler(self.cv_ui_handler, title)
+        if visdom is not None:  # ← 新增
+            self.visdom.register_event_handler(self.cv_ui_handler, title)
 
     def draw_grid(self, data):
         stride_r = int(data.shape[1] / self.feat_shape[0])
@@ -434,6 +439,9 @@ class VisBBReg(VisBase):
 
 class Visdom:
     def __init__(self, debug=0, ui_info=None, visdom_info=None, env=None):
+        if visdom is None:          # ← 新增：如果 visdom 未导入，直接禁用
+            self.disabled = True
+            return
         self.debug = debug
         if env is not None:
             self.visdom = visdom.Visdom(server=visdom_info.get('server', '127.0.0.1'),
@@ -443,23 +451,25 @@ class Visdom:
                                         port=visdom_info.get('port', 8097))
         self.registered_blocks = {}
         self.blocks_list = []
-
         self.visdom.properties(self.blocks_list, opts={'title': 'Block List'}, win='block_list')
         self.visdom.register_event_handler(self.block_list_callback_handler, 'block_list')
+        if ui_info is not None:
+            self.visdom.register_event_handler(ui_info['handler'], ui_info['win_id'])
 
         if ui_info is not None:
             self.visdom.register_event_handler(ui_info['handler'], ui_info['win_id'])
 
     def block_list_callback_handler(self, data):
+        if getattr(self, 'disabled', False):  # ← 新增：若禁用则直接返回
+            return
         field_name = self.blocks_list[data['propertyId']]['name']
-
         self.registered_blocks[field_name].toggle_display(data['value'])
-
         self.blocks_list[data['propertyId']]['value'] = data['value']
-
         self.visdom.properties(self.blocks_list, opts={'title': 'Block List'}, win='block_list')
 
     def register(self, data, mode, debug_level=0, title='Data', **kwargs):
+        if getattr(self, 'disabled', False):  # ← 新增
+            return
         if title not in self.registered_blocks.keys():
             show_data = self.debug >= debug_level
 
@@ -495,3 +505,4 @@ class Visdom:
                 raise ValueError('Visdom Error: Unknown data mode {}'.format(mode))
         # Update
         self.registered_blocks[title].update(data, **kwargs)
+
